@@ -13,8 +13,15 @@ as taken from http://docs.python.org/dev/library/ssl.html#certificates
 '''
 
 import os, sys, time, errno, signal, socket, select, logging
+import psutil
 import multiprocessing
+import subprocess
 from http.server import SimpleHTTPRequestHandler
+
+import websockify.trafficlogger as trafficlogger
+import websockify.banlist as banlist
+import json
+from urllib.parse import urlparse, parse_qs
 
 # Degraded functionality if these imports are missing
 for mod, msg in [('ssl', 'TLS/SSL/wss is disabled'),
@@ -138,6 +145,7 @@ class WebSockifyRequestHandler(WebSocketRequestHandlerMixIn, SimpleHTTPRequestHa
             # Send pending frames
             try:
                 self.request.sendmsg(self.send_parts[0])
+                trafficlogger.log_recv(self, self.send_parts[0]) # NOTE - since we're proxying, send vs recv is reversed from what you'd expect here
             except WebSocketWantWriteError:
                 self.print_traffic("<.")
                 return True
@@ -169,6 +177,7 @@ class WebSockifyRequestHandler(WebSocketRequestHandlerMixIn, SimpleHTTPRequestHa
                           'reason': self.request.close_reason}
                 return bufs, closed
 
+            trafficlogger.log_send(self, buf) # NOTE - since we're proxying, send vs recv is reversed from what you'd expect here
             self.print_traffic("}")
 
             if self.rec:
@@ -219,11 +228,20 @@ class WebSockifyRequestHandler(WebSocketRequestHandlerMixIn, SimpleHTTPRequestHa
         except IndexError:
             pass
 
+        if 'X-Forwarded-For' in self.headers:
+            client_addr = self.headers['X-Forwarded-For']
+
         if is_ssl:
             self.stype = "SSL/TLS (wss://)"
         else:
             self.stype = "Plain non-SSL (ws://)"
 
+        if client_addr and banlist.is_banned(client_addr):
+            print("BANNED USER DETECTED")
+            self.send_close(403, 'Access denied')
+            return
+
+        trafficlogger.log_conn(self)
         self.log_message("%s: %s WebSocket connection", client_addr,
                          self.stype)
         if self.path != '/':
@@ -244,15 +262,82 @@ class WebSockifyRequestHandler(WebSocketRequestHandlerMixIn, SimpleHTTPRequestHa
             _, exc, _ = sys.exc_info()
             self.send_close(exc.args[0], exc.args[1])
 
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        super().end_headers()
+
+
     def do_GET(self):
         if self.web_auth:
             # ensure connection is authorized, this seems to apply to list_directory() as well
             self.auth_connection()
 
+
         if self.only_upgrade:
             self.send_error(405)
+        elif self.path[0:11] == "/trafficlog":
+            parsed = urlparse(self.path)
+            urlargs = parse_qs(parsed.query)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+
+            now = time.time()
+
+            end = float(urlargs.get('end', [now])[0])
+            begin = float(urlargs.get('begin', [now - 3600])[0])
+            chunks = int(urlargs.get('chunks', [10])[0])
+            tdata = trafficlogger.get_range(begin, end, chunks)
+            self.wfile.write(bytes(tdata + '\n', 'utf-8'))
+            self.close_connection = True
+        elif self.path[0:12] == "/serverstats":
+            activeusers = 0;
+            foo = subprocess.getoutput('ps aux |grep pppd |grep -v grep')
+            lines = foo.split('\n')
+            if len(lines) > 1:
+                activeusers = int(len(lines) / 2)
+            memstats = psutil.virtual_memory()
+            serverstats = {
+                    "activeusers": activeusers,
+                    "load": os.getloadavg(),
+                    "memory": {
+                        "total": memstats.total,
+                        "available": memstats.available,
+                        "percent": memstats.percent,
+                        "used": memstats.used,
+                        "free": memstats.free,
+                        "active": memstats.active,
+                        "inactive": memstats.inactive,
+                        "buffers": memstats.buffers,
+                        "cached": memstats.cached,
+                        "shared": memstats.shared,
+                        "slab": memstats.slab,
+                    }
+                }
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            self.wfile.write(bytes(json.dumps(serverstats), 'utf-8'))
+            self.close_connection = True
+
         else:
             super().do_GET()
+
+    def do_POST(self):
+        print('its a post')
+        if self.path == '/ban':
+            self.send_response(200)
+            content_len = int(self.headers.get('Content-Length', 0))
+            post_body = json.loads(self.rfile.read(content_len))
+            print(post_body)
+            if 'host' in post_body:
+                print('ban it', post_body['host'])
+                banlist.ban(post_body['host'])
+                self.wfile.write(bytes('{"success": true}', 'utf-8'));
+            self.close_connection = True
+
 
     def list_directory(self, path):
         if self.file_only:
@@ -637,6 +722,7 @@ class WebSockifyServer():
         """ Called after WebSockets startup """
         self.vmsg("WebSockets server started")
 
+
     def poll(self):
         """ Run periodically while waiting for connections. """
         #self.vmsg("Running poll()")
@@ -744,6 +830,7 @@ class WebSockifyServer():
             keepfd.append(lsock.fileno())
             self.daemonize(keepfd=keepfd, chdir=self.web)
 
+        trafficlogger.start_logger()
         self.started()  # Some things need to happen after daemonizing
 
         # Allow override of signals

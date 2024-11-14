@@ -19,6 +19,7 @@ import select
 from websockify import websockifyserver
 from websockify import auth_plugins as auth
 from urllib.parse import parse_qs, urlparse
+import websockify.banlist as banlist
 
 class ProxyRequestHandler(websockifyserver.WebSockifyRequestHandler):
 
@@ -553,6 +554,9 @@ def websockify_init():
                            "Use this if the messages produced by websockify seem abnormal.")
     parser.add_option("--file-only", action="store_true",
                       help="use this to disable directory listings in web server.")
+    parser.add_option("--banlist-file", metavar="FILE",
+            dest="banlist_file",
+            help="File where banlist is stored")
 
     (opts, args) = parser.parse_args()
 
@@ -731,6 +735,11 @@ def websockify_init():
         opts.auth_plugin = auth_plugin_cls(opts.auth_source)
 
     del opts.auth_source
+
+    if opts.banlist_file:
+        print('load banlist', opts.banlist_file)
+        banlist.load(opts.banlist_file)
+        del opts.banlist_file
 
     # Create and start the WebSockets proxy
     libserver = opts.libserver
