@@ -278,7 +278,13 @@ class WebSockifyRequestHandler(WebSocketRequestHandlerMixIn, SimpleHTTPRequestHa
         if self.only_upgrade:
             self.send_error(405)
         elif pathparts[1] == 'admin':
-            if pathparts[2] == 'trafficlog':
+            if len(pathparts) == 2:
+                self.send_response(302)
+                self.send_header('Location', '/admin/')
+                self.end_headers()
+                self.wfile.write(bytes('Redirecting...', 'utf-8'))
+                self.close_connection = True
+            elif pathparts[2] == 'trafficlog':
                 urlargs = parse_qs(parsed.query)
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/plain')
