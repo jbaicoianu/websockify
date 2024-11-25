@@ -948,6 +948,7 @@ class WebSockifyServer():
                     except (self.Terminate, SystemExit, KeyboardInterrupt):
                         self.msg("In exit")
                         # terminate all child processes
+                        trafficlogger.stop_logger()
                         if not self.run_once:
                             children = multiprocessing.active_children()
 

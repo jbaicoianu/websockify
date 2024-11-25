@@ -7,6 +7,7 @@ import math
 import csv
 
 logqueue = multiprocessing.Queue()
+logging_thread_stop = threading.Event()
 
 def get_client_addr(conn):
     client_addr = 'unknown'
@@ -96,7 +97,6 @@ def get_range(begin, end, chunks=10):
 def process_logs():
     logframes = {}
     lastlog = time.time()
-    print('logging started')
     sqlcon = sqlite3.connect('/var/lib/websockify/trafficlog.db')
     cur = sqlcon.cursor()
     cur.execute("create table if not exists trafficlog(ts, addr, conn, send, recv)")
@@ -106,7 +106,7 @@ def process_logs():
     except sqlite3.OperationalError:
         pass
     sqlcon.commit()
-    while True:
+    while not logging_thread_stop.is_set():
         now = time.time()
         try:
             for obj in iter(logqueue.get_nowait, None):
@@ -137,7 +137,10 @@ def process_logs():
         time.sleep(.01)
 
 def start_logger():
-    print('start logger')
-    t = threading.Thread(target=process_logs)
-    t.start()
+    print('Starting logger')
+    logging_thread = threading.Thread(target=process_logs)
+    logging_thread.start()
 
+def stop_logger():
+    print('Stopping logger')
+    logging_thread_stop.set()
