@@ -1,0 +1,71 @@
+<html>
+  <body>
+    <script src="https://d3js.org/d3.v4.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+
+    <header>
+      <nav>
+        <a href="#users">Users</a>
+        <a href="#bans">Bans</a>
+      </nav>
+    </header>
+    <pppusers-graph></pppusers-graph>
+    <script src="pppusers.js?1"></script>
+    <style>
+      body {
+        padding-top: 2em;
+      }
+      pppusers-graph {
+        display: block;
+        position: relative;
+      }
+      pppusers-graph pppusers-server-stats {
+        display: block;
+        font-size: 2em;
+      }
+      pppusers-graph pppusers-server-stats span {
+        padding-right: 2em;
+      }
+      pppusers-graph pppusers-graph-timeframeselector {
+        position: absolute;
+        top: 0;
+        right: 0;
+      }
+      pppusers-graph pppusers-graph-timeframeselector button {
+        background: white;
+        border: 1px solid black;
+        border-radius: 5px;
+      }
+      pppusers-graph pppusers-graph-timeframeselector button.selected {
+        background: lightgreen;
+      }
+      pppusers-graph .tick {
+        font-size: 2em;
+      }
+      pppusers-graph .label {
+        font-size: 1.4em;
+        cursor: pointer;
+      }
+      pppusers-graph .label.banned {
+        text-decoration: line-through;
+      }
+      header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: #666;
+        padding: .5em;
+        box-shadow: 0 5px 5px rgba(0,0,0,.5);
+        z-index: 100;
+      }
+      header nav a {
+        color: white;
+        display: inline-block;
+        padding: 0 1em;
+        text-decoration: none;
+      }
+    </style>
+  </body>
+</html>
+

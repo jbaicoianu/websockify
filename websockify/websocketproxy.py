@@ -738,7 +738,7 @@ def websockify_init():
 
     if opts.banlist_file:
         print('load banlist', opts.banlist_file)
-        banlist.load(opts.banlist_file)
+        banlist.set_active_banlist(opts.banlist_file)
         del opts.banlist_file
 
     # Create and start the WebSockets proxy

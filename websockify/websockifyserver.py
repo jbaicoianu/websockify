@@ -272,71 +272,87 @@ class WebSockifyRequestHandler(WebSocketRequestHandlerMixIn, SimpleHTTPRequestHa
             # ensure connection is authorized, this seems to apply to list_directory() as well
             self.auth_connection()
 
+        parsed = urlparse(self.path)
+        pathparts = parsed.path.split('/')
 
         if self.only_upgrade:
             self.send_error(405)
-        elif self.path[0:11] == "/trafficlog":
-            parsed = urlparse(self.path)
-            urlargs = parse_qs(parsed.query)
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/plain')
-            self.send_header('Cache-Control', 'no-cache')
-            self.end_headers()
+        elif pathparts[1] == 'admin':
+            if pathparts[2] == 'trafficlog':
+                urlargs = parse_qs(parsed.query)
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/plain')
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
 
-            now = time.time()
+                now = time.time()
 
-            end = float(urlargs.get('end', [now])[0])
-            begin = float(urlargs.get('begin', [now - 3600])[0])
-            chunks = int(urlargs.get('chunks', [10])[0])
-            tdata = trafficlogger.get_range(begin, end, chunks)
-            self.wfile.write(bytes(tdata + '\n', 'utf-8'))
-            self.close_connection = True
-        elif self.path[0:12] == "/serverstats":
-            activeusers = 0;
-            foo = subprocess.getoutput('ps aux |grep pppd |grep -v grep')
-            lines = foo.split('\n')
-            if len(lines) > 1:
-                activeusers = int(len(lines) / 2)
-            memstats = psutil.virtual_memory()
-            serverstats = {
-                    "activeusers": activeusers,
-                    "load": os.getloadavg(),
-                    "memory": {
-                        "total": memstats.total,
-                        "available": memstats.available,
-                        "percent": memstats.percent,
-                        "used": memstats.used,
-                        "free": memstats.free,
-                        "active": memstats.active,
-                        "inactive": memstats.inactive,
-                        "buffers": memstats.buffers,
-                        "cached": memstats.cached,
-                        "shared": memstats.shared,
-                        "slab": memstats.slab,
+                end = float(urlargs.get('end', [now])[0])
+                begin = float(urlargs.get('begin', [now - 3600])[0])
+                chunks = int(urlargs.get('chunks', [10])[0])
+                tdata = trafficlogger.get_range(begin, end, chunks)
+                self.wfile.write(bytes(tdata + '\n', 'utf-8'))
+                self.close_connection = True
+            elif pathparts[2] == "serverstats":
+                activeusers = 0
+                processes = subprocess.getoutput('ps aux |grep "pppd passive" |grep -v grep')
+                lines = processes.split('\n')
+                if len(lines) > 1:
+                    activeusers = int(len(lines) / 2)
+                memstats = psutil.virtual_memory()
+                serverstats = {
+                        "activeusers": activeusers,
+                        "load": os.getloadavg(),
+                        "memory": {
+                            "total": memstats.total,
+                            "available": memstats.available,
+                            "percent": memstats.percent,
+                            "used": memstats.used,
+                            "free": memstats.free,
+                            "active": memstats.active,
+                            "inactive": memstats.inactive,
+                            "buffers": memstats.buffers,
+                            "cached": memstats.cached,
+                            "shared": memstats.shared,
+                            "slab": memstats.slab,
+                        }
                     }
-                }
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/plain')
-            self.send_header('Cache-Control', 'no-cache')
-            self.end_headers()
-            self.wfile.write(bytes(json.dumps(serverstats), 'utf-8'))
-            self.close_connection = True
-
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(bytes(json.dumps(serverstats), 'utf-8'))
+                self.close_connection = True
+            elif pathparts[2] == "banlist":
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(bytes(json.dumps(banlist.get()), 'utf-8'))
+                self.close_connection = True
+            else:
+                super().do_GET()
         else:
             super().do_GET()
 
     def do_POST(self):
-        print('its a post')
-        if self.path == '/ban':
-            self.send_response(200)
-            content_len = int(self.headers.get('Content-Length', 0))
-            post_body = json.loads(self.rfile.read(content_len))
-            print(post_body)
-            if 'host' in post_body:
-                print('ban it', post_body['host'])
-                banlist.ban(post_body['host'])
-                self.wfile.write(bytes('{"success": true}', 'utf-8'));
-            self.close_connection = True
+        pathparts = self.path.split('/')
+        if pathparts[1] == 'admin':
+            if pathparts[2] == 'ban' or pathparts[2] == 'unban':
+                action = pathparts[2]
+                self.send_response(200)
+                self.end_headers()
+                content_len = int(self.headers.get('Content-Length', 0))
+                post_body = json.loads(self.rfile.read(content_len))
+                success = False
+                if 'host' in post_body:
+                    if action == 'ban':
+                        print('ban it', post_body['host'])
+                        success = banlist.ban(post_body['host'])
+                    if action == 'unban':
+                        print('unban it', post_body['host'])
+                        success = banlist.unban(post_body['host'])
+                response = json.dumps({"success": success})
+                self.wfile.write(bytes(response, 'utf-8'))
+                self.close_connection = True
 
 
     def list_directory(self, path):

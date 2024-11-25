@@ -1,68 +1,37 @@
 <html>
-  <body>
-    <script src="https://d3js.org/d3.v4.js"></script>
-    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
-
-    <header>
-      <nav>
-        <a href="#users">Users</a>
-        <a href="#bans">Bans</a>
-      </nav>
-    </header>
-    <pppusers-graph></pppusers-graph>
-    <script src="pppusers.js?1"></script>
+  <head>
+     <meta charset="utf-8">
     <style>
-body {
-  padding-top: 2em;
-}
-      pppusers-graph {
-        display: block;
-        position: relative;
+      body {
+        background: black;
+        height: 100%;
       }
-      pppusers-graph pppusers-server-stats {
-        display: block;
-        font-size: 2em;
+      section {
+        text-align: center;
       }
-      pppusers-graph pppusers-server-stats span {
-        padding-right: 2em;
+      pre {
+        color: lime;
+        margin: 10em auto;;
       }
-      pppusers-graph pppusers-graph-timeframeselector {
-        position: absolute;
-        top: 0;
-        right: 0;
-      }
-      pppusers-graph pppusers-graph-timeframeselector button {
-        background: white;
-        border: 1px solid black;
-        border-radius: 5px;
-      }
-      pppusers-graph pppusers-graph-timeframeselector button.selected {
-        background: lightgreen;
-      }
-      pppusers-graph .tick {
-        font-size: 2em;
-      }
-      pppusers-graph .label {
-        font-size: 1.4em;
-        cursor: pointer;
-      }
-      header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        background: #666;
-        padding: .5em;
-        box-shadow: 0 5px 5px rgba(0,0,0,.5);
-        z-index: 100;
-      }
-      header nav a {
-        color: white;
-        display: inline-block;
-        padding: 0 1em;
-        text-decoration: none;
+      a {
+        color: lime;
       }
     </style>
+  </head>
+  <body>
+    <section>
+      <pre>
+██████╗ ██████╗ ██████╗  ██████╗ ██╗    ██╗
+██╔══██╗██╔══██╗██╔══██╗██╔═══██╗██║    ██║
+██████╔╝██████╔╝██████╔╝██║   ██║██║ █╗ ██║
+██╔═══╝ ██╔═══╝ ██╔═══╝ ██║   ██║██║███╗██║
+██║     ██║     ██║     ╚██████╔╝╚███╔███╔╝
+╚═╝     ╚═╝     ╚═╝      ╚═════╝   ╚══╝╚══╝
+--------------------------------------------
+Virtualized Dial-Up ISP
+--------------------------------------------
+      </pre>
+      <a href="https://github.com/jbaicoianu/pppoW-server/">GitHub</a>
+    </section>
   </body>
 </html>
-

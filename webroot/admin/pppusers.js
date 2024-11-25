@@ -1,9 +1,9 @@
 class PPPUserGraph extends HTMLElement {
   connectedCallback() {
-    console.log('create graph');
     this.serverstats = document.createElement('pppusers-server-stats');
     this.appendChild(this.serverstats);
-    this.createGraph();
+    this.banlist = [];
+    this.updateBanlist().then(() => this.createGraph());
   }
   createGraph() {
     // set the dimensions and margins of the graph
@@ -34,10 +34,15 @@ class PPPUserGraph extends HTMLElement {
     let svg = this.svg,
         width = this.width,
         height = this.height;
-    d3.csv("/trafficlog?chunks=250&begin=" + ((Date.now() / 1000) - (this.timeframe)), (data) => {
+    d3.csv("/admin/trafficlog?chunks=250&begin=" + ((Date.now() / 1000) - (this.timeframe)), (data) => {
       // List of groups = header of the csv files
       var keys = data.columns.slice(1)
-      console.log('my data', data);
+      // strip undefined values
+      data.forEach(d => {
+        for (let k in d) {
+          if (d[k] === undefined) { delete d[k]; }
+        }
+      });
 
       // color palette
       var color = d3.scaleOrdinal()
@@ -196,7 +201,7 @@ class PPPUserGraph extends HTMLElement {
 
       legendUpdate.enter()
         .append("rect")
-          .attr("class", d => 'labelkey ' + this.sanitizeSelector(d))
+          .attr("class", d => 'labelkey ' + this.sanitizeSelector(d) + (this.banlist.indexOf(d) != -1 ? ' banned' : ''))
           .attr("x", width * .9)
           .attr("y", function(d,i){ return 10 + i*(size+5)}) // 100 is where the first dot appears. 25 is the distance between dots
           .attr("width", size)
@@ -215,7 +220,7 @@ class PPPUserGraph extends HTMLElement {
         .append("text")
           .attr("x", width * .9 + size*1.2)
           .attr("y", function(d,i){ return 10 + i*(size+5) + (size/2)}) // 100 is where the first dot appears. 25 is the distance between dots
-          .attr('class', d => 'label ' + this.sanitizeSelector(d))
+          .attr("class", d => 'label ' + this.sanitizeSelector(d) + (this.banlist.indexOf(d) != -1 ? ' banned' : '');)
           .style("fill", function(d){ return color(d)})
           .text(function(d){ return d})
           .attr("text-anchor", "left")
@@ -227,7 +232,7 @@ class PPPUserGraph extends HTMLElement {
         .remove()
       legendEnter.merge(legendLabelUpdate)
           .style("fill", function(d){ return color(d)})
-          .attr('class', d => 'label ' + this.sanitizeSelector(d))
+          .attr("class", d => 'label ' + this.sanitizeSelector(d) + (this.banlist.indexOf(d) != -1 ? ' banned' : ''))
           .text(d => d);
     })
 
@@ -263,13 +268,13 @@ class PPPUserGraph extends HTMLElement {
   showAddressPopup(addr) {
     if (!this.popup) {
       this.popup = document.createElement('pppusers-popup');
+      this.popup.addEventListener('updateban', ev => this.updateBanlist().then(() => this.updateGraph()));
     }
     if (!this.popup.parentNode) {
       document.body.appendChild(this.popup);
     }
     let el = document.querySelector('.label.' + this.sanitizeSelector(addr));
-    console.log('blip', addr, el);
-    this.popup.show(el, addr);
+    this.popup.show(el, addr, this.banlist.indexOf(addr) != -1);
   }
   hideAddressPopup() {
     if (this.popup && this.popup.parentNode) {
@@ -286,6 +291,12 @@ class PPPUserGraph extends HTMLElement {
         this.updateGraph();
       }
     });
+  }
+  async updateBanlist() {
+    let res = await fetch('/admin/banlist'),
+        banlist = await res.json();
+
+    this.banlist = banlist;
   }
 }
 class PPPUserGraphTimeframeSelector extends HTMLElement {
@@ -330,23 +341,34 @@ class PPPUserPopup extends HTMLElement {
       let banbutton = this.banbutton =  document.createElement('button');
       banbutton.addEventListener('click', ev => this.handleBanClick(ev));
       banbutton.innerText = 'Ban IP';
+      this.banbutton = banbutton;
       this.appendChild(banbutton);
       this.style.position = 'absolute';
       this.style.zIndex = 100;
     }
   }
-  show(parent, addr) {
+  show(parent, addr, isbanned=false) {
     this.currentaddr = addr;
+    this.currentaddrIsBanned = isbanned;
     if (parent) {
       let pos = parent.getBoundingClientRect();
 
-console.log('show it', pos, parent);
       this.style.top = (pos.y + document.body.scrollTop) + 'px';
       this.style.left = (pos.x + pos.width + 10) + 'px';
+      this.banbutton.innerHTML = (isbanned ? 'Unban' : 'Ban IP');
     }
   }
-  handleBanClick(ev) {
-    fetch('/ban', { method: 'POST', body: JSON.stringify({host: this.currentaddr}) });
+  async handleBanClick(ev) {
+    if (!this.currentaddrIsBanned) {
+      await fetch('/admin/ban', { method: 'POST', body: JSON.stringify({host: this.currentaddr}) });
+      this.banbutton.innerHTML = 'Unban';
+      this.currentaddrIsBanned = true;
+    } else {
+      await fetch('/admin/unban', { method: 'POST', body: JSON.stringify({host: this.currentaddr}) });
+      this.banbutton.innerHTML = 'Ban IP';
+      this.currentaddrIsBanned = false;
+    }
+    this.dispatchEvent(new CustomEvent('updateban'));
   }
 }
 class PPPUserServerStats extends HTMLElement {
@@ -355,7 +377,7 @@ class PPPUserServerStats extends HTMLElement {
     setInterval(() => this.refreshStats(), 15000);
   }
   async refreshStats() {
-    let res = await fetch('/serverstats');
+    let res = await fetch('/admin/serverstats');
     let stats = await res.json();
     this.innerHTML = `<span>Active users: ${stats.activeusers}</span><span>Load Avg: ${stats.load[0].toFixed(1)}</span><span>Memory: ${stats.memory.percent}% used</span>`
   }
